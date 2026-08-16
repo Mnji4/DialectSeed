@@ -1,129 +1,135 @@
 # DialectSeed
 
-DialectSeed started as a small project to record my own hometown dialect, Yangjiang Cantonese.
+**An open-source pipeline for collecting regional speech and building low-resource ASR/TTS systems.**
 
-The more I worked on it, the less sense it made to keep the project tied to one place. Many local speech varieties face the same problem: fewer young people speak them fluently, recordings are scattered across social media, and the material that does exist often lacks transcripts, speaker metadata, provenance, or clear permission for research and model training.
+Commercial speech systems tend to prioritize languages and accents with large user bases, abundant data, and clear deployment demand. Regional dialects often have none of those advantages. The result is not only cultural loss: people who rely on local speech can also be excluded from modern digital services.
 
-DialectSeed is an open-source framework for communities to build structured speech corpora for their own local languages, dialects, and speech varieties.
+This is personal for me. My grandmother cannot type and does not speak standard Mandarin comfortably. A voice interface should be the most natural way for her to use a digital service, yet the speech technology around her is built for a language variety she does not normally use.
 
-The basic workflow is intentionally simple: choose a speech variety, read a prompt, record how you would naturally say it, correct the transcript, and submit the recording with explicit consent settings. Moderators can review submissions, and approved recordings with training permission can later be exported for ASR or TTS experiments.
+DialectSeed started as a small project to record my hometown dialect, Yangjiang Cantonese. It is now being generalized into an open-source, end-to-end workflow that other communities can reuse for their own underrepresented local languages and speech varieties.
 
-Yangjiang Cantonese remains in the project as the first seed dataset. It is an example, not a hard-coded system assumption.
+The goal is simple: **make it cheap and reproducible to go from community recordings to a clean, consented dataset and then to a small dialect-adapted speech model.**
 
-## What it can do
+> The training recipes are implemented, but the project does not yet claim a finished production-quality dialect ASR or TTS model. Model experiments are still in active development.
 
-- Collect multiple dialects, local languages, or speech varieties in one deployment.
-- Let contributors request a new variety when theirs is missing.
-- Store the reference prompt separately from the actual spoken transcript.
-- Assign an anonymous browser-local `speaker_id` so train/validation/test splits can be speaker-disjoint.
-- Record archival consent and model-training consent separately.
-- Moderate, approve, reject, restore, and delete recordings.
-- Export ASR/TTS-ready manifests from approved, explicitly licensed recordings.
-- Download datasets as `metadata.jsonl + audio/` with stable speaker-based splits.
+## The pipeline
 
-## What it is not
+```text
+Community contributors
+        |
+        v
+Browser recording + transcript correction
+        |
+        v
+Consent + anonymous speaker metadata
+        |
+        v
+Moderation and quality control
+        |
+        v
+D1 metadata + R2 audio storage
+        |
+        v
+Speaker-disjoint dataset export
+        |
+        +-----------------------+
+        |                       |
+        v                       v
+ Qwen3-ASR-0.6B          VoxCPM1.5
+   ASR fine-tuning         TTS LoRA
+        |                       |
+        +-----------+-----------+
+                    |
+                    v
+          Local speech technology
+```
 
-DialectSeed is corpus collection infrastructure. It is not a pretrained dialect ASR/TTS model, and it is not a complete linguistic fieldwork suite.
+Yangjiang Cantonese remains the first seed variety, but it is only an example. The data model and collection workflow are designed to support many dialects, local languages, and speech varieties in the same deployment.
 
-Crowdsourced browser recordings are useful, but they are not automatically high-quality TTS data. TTS normally needs tighter control over recording conditions, audio consistency, text normalization, and speaker coverage. DialectSeed keeps the original uploaded audio and metadata intact so downstream preprocessing can be explicit and reproducible instead of hidden inside the collection step.
+## What DialectSeed provides
+
+### Community data collection
+
+- Record speech directly in the browser.
+- Collect multiple speech varieties in one deployment.
+- Let contributors request a variety that does not exist yet.
+- Store the reference prompt separately from what the speaker actually said.
+- Allow the contributor to correct the spoken transcript before submission.
+- Assign an anonymous browser-local `speaker_id` for speaker-aware dataset splitting.
+
+### Consent and moderation
+
+- Separate permission to **preserve a recording** from permission to **use it for model training**.
+- Review recordings before they enter the training corpus.
+- Approve, reject, restore, or delete submissions.
+- Preserve a consent version and transcript snapshot with every recording.
+- Never automatically grant training permission to recordings migrated from the old Yangjiang-only version.
+
+### Dataset export
+
+- Export only recordings that are approved and explicitly licensed for training.
+- Download `metadata.jsonl + audio/` datasets.
+- Keep train/validation/test splits speaker-disjoint when the corpus has enough speakers.
+- Convert browser audio into model-specific WAV formats.
+- Produce manifests directly compatible with the selected upstream trainers.
+
+### Low-resource model training
+
+The repository includes a lightweight training layer in [`training/`](training/) rather than maintaining forks of large upstream model repositories.
+
+Current default recipes:
+
+| Task | Model | Size | Strategy | Why |
+| --- | --- | ---: | --- | --- |
+| ASR | Qwen3-ASR-0.6B | 0.6B | supervised fine-tuning | strong pretrained coverage for Cantonese and Chinese dialects |
+| TTS | VoxCPM1.5 | <1B | LoRA | official parameter-efficient fine-tuning and same-speaker reference audio support |
+
+For small dialect corpora, model size is not the main variable. A strong pretrained speech model, clean transcripts, conservative fine-tuning, and speaker-safe evaluation matter more than simply choosing the smallest network available.
+
+The project therefore starts with sub-1B models because they are practical to iterate on, cheap enough for repeated experiments, and already have useful Chinese/Cantonese speech priors.
+
+Other useful baselines include Whisper, SenseVoice, CosyVoice, F5-TTS, and GPT-SoVITS. The reasoning and training commands are documented in [`training/README.md`](training/README.md).
+
+## Repository structure
+
+```text
+src/
+  App.tsx                     contributor recording interface
+  AdminPage.tsx               moderation and export interface
+
+worker/src/index.ts           Cloudflare Worker API
+schema.sql                    current D1 schema
+migrations/                   database migrations
+scripts/export-dataset.mjs    approved dataset downloader
+
+training/
+  prepare.py                  model-specific data preparation
+  asr/qwen3_asr/              ASR setup, training and CER evaluation
+  tts/voxcpm/                 VoxCPM1.5 LoRA setup and training
+
+public/_worker.js             Pages -> Worker same-origin proxy
+wrangler.toml                 Cloudflare configuration
+```
 
 ## Data model
 
-The core structure is deliberately small:
+The collection model is intentionally small:
 
 ```text
-variety  ->  prompt / text  ->  recording
+variety  ->  prompt/text  ->  recording
 ```
 
-### `varieties`
+A `variety` represents a practical collection unit. DialectSeed does not try to settle whether a community should call its speech a language, dialect, topolect, accent, or local variety.
 
-A `variety` is a practical collection unit. The project does not try to settle whether something should be called a language, dialect, topolect, or local variety.
+A recording stores the information needed for later corpus work: its variety, source prompt, actual transcript snapshot, anonymous speaker ID, duration, storage key, moderation state, and consent state. See [`schema.sql`](schema.sql) for the complete schema.
 
-```text
-id
-slug
-name
-language_tag
-region
-description
-status          pending / active / archived
-created_by
-created_at
-```
-
-### `texts`
-
-Prompts keep the reference text separate from the local-language form.
-
-```text
-id
-variety_id
-content
-reference_text
-local_text
-source          seed / user
-prompt_key
-status
-created_at
-```
-
-The reference text is there to help the contributor understand the intended meaning. The transcript saved with a recording is the label that matters for supervised ASR/TTS training.
-
-### `recordings`
-
-Audio files live in R2. D1 stores their metadata and consent state.
-
-```text
-id
-text_id
-variety_id
-r2_key
-mime_type
-size_bytes
-duration_ms
-speaker_id
-speaker_label
-consent_archive
-consent_training
-consent_version
-reference_text_snapshot
-transcript_text_snapshot
-status
-created_at
-```
-
-A recording enters the training export only when all of the following are true:
+A recording can enter the training export only when:
 
 1. its moderation status is `approved`;
-2. the contributor explicitly granted training permission;
-3. a non-empty spoken transcript is available.
+2. the contributor explicitly granted model-training permission;
+3. the spoken transcript is non-empty.
 
-Old recordings migrated from the original Yangjiang-only version are **not** automatically granted model-training permission. Their `consent_training` value remains `0` unless consent is collected separately.
-
-## Stack
-
-```text
-React + TypeScript + Vite     collection UI and admin UI
-Cloudflare Pages              frontend hosting
-Cloudflare Workers            API
-Cloudflare D1                 metadata
-Cloudflare R2                 audio objects
-```
-
-Main files:
-
-```text
-src/App.tsx                    contributor interface
-src/AdminPage.tsx              moderation and export interface
-worker/src/index.ts            Worker API
-schema.sql                     fresh database schema
-migrations/0002_multivariety.sql
-                               migration from the original single-variety schema
-scripts/export-dataset.mjs     dataset downloader/exporter
-public/_worker.js              same-origin Pages -> Worker proxy
-```
-
-## Run locally
+## Quick start
 
 Node.js 20+ is recommended.
 
@@ -132,13 +138,11 @@ npm install
 npm run dev
 ```
 
-Run the Worker in another terminal:
+Run the API in another terminal:
 
 ```bash
 npm run dev:worker
 ```
-
-The frontend uses `http://localhost:8787` as its development API by default. Set `VITE_API_BASE_URL` to use another endpoint.
 
 Initialize a local D1 database:
 
@@ -146,15 +150,99 @@ Initialize a local D1 database:
 npm run db:migrate:local
 ```
 
-Build the frontend:
+The frontend uses `http://localhost:8787` as the development API by default. Set `VITE_API_BASE_URL` to use another endpoint.
+
+## Export a training dataset
+
+From a deployed DialectSeed instance:
 
 ```bash
-npm run build
+node scripts/export-dataset.mjs \
+  --api https://your-dialectseed.example \
+  --token "$ADMIN_TOKEN" \
+  --task asr \
+  --out ./dataset-asr
 ```
+
+For TTS:
+
+```bash
+node scripts/export-dataset.mjs \
+  --api https://your-dialectseed.example \
+  --token "$ADMIN_TOKEN" \
+  --task tts \
+  --out ./dataset-tts
+```
+
+Restrict an export to one variety with `--variety <id>`.
+
+When there are fewer than 10 distinct speakers, the exporter keeps all samples in the training split instead of constructing a statistically meaningless tiny validation/test split.
+
+## Train ASR
+
+Prepare the exported dataset:
+
+```bash
+python training/prepare.py \
+  --format qwen3-asr \
+  --input dataset-asr/metadata.jsonl \
+  --output training-data/qwen3-asr
+```
+
+Then fine-tune Qwen3-ASR-0.6B:
+
+```bash
+bash training/asr/qwen3_asr/train.sh \
+  training-data/qwen3-asr \
+  runs/qwen3-asr-0.6b
+```
+
+Evaluate character error rate on held-out speakers:
+
+```bash
+python training/asr/qwen3_asr/evaluate.py \
+  --model runs/qwen3-asr-0.6b/checkpoint-XXX \
+  --manifest training-data/qwen3-asr/test.jsonl
+```
+
+The important comparison is not training loss. It is the base model versus the fine-tuned model on speakers that were never seen during training.
+
+## Train TTS
+
+Prepare the TTS data:
+
+```bash
+python training/prepare.py \
+  --format voxcpm \
+  --input dataset-tts/metadata.jsonl \
+  --output training-data/voxcpm
+```
+
+Then run VoxCPM1.5 LoRA fine-tuning:
+
+```bash
+bash training/tts/voxcpm/train_lora.sh \
+  training-data/voxcpm \
+  runs/voxcpm1.5-lora
+```
+
+The converter can pair a recording with another clip from the same speaker as `ref_audio` without crossing dataset splits. This uses the anonymous speaker identity collected by DialectSeed instead of treating every recording as an unrelated sample.
+
+See [`training/README.md`](training/README.md) for model selection, environment setup, hyperparameters, and baseline recommendations.
 
 ## Deploy to Cloudflare
 
-Create a D1 database, an R2 bucket, and a Pages project, then replace the placeholders in `wrangler.toml` with your own resource IDs.
+DialectSeed currently uses:
+
+```text
+React + TypeScript + Vite     web interface
+Cloudflare Pages              frontend hosting
+Cloudflare Workers            API
+Cloudflare D1                 metadata
+Cloudflare R2                 audio storage
+```
+
+Create a D1 database, an R2 bucket, and a Pages project, then replace the placeholders in `wrangler.toml`.
 
 Initialize the remote database:
 
@@ -162,87 +250,56 @@ Initialize the remote database:
 npm run db:migrate:remote
 ```
 
-Set an admin token:
+Set the admin token:
 
 ```bash
-printf '%s' 'your-admin-token' | npx wrangler secret put ADMIN_TOKEN --config wrangler.toml
+printf '%s' 'your-admin-token' | \
+  npx wrangler secret put ADMIN_TOKEN --config wrangler.toml
 ```
 
-Optionally set a random salt if you want irreversible IP hashes for basic abuse analysis:
+Optionally configure `IP_HASH_SALT` for irreversible IP hashes used in basic abuse analysis. If it is not configured, DialectSeed does not store IP hashes.
 
-```bash
-printf '%s' 'a-random-secret' | npx wrangler secret put IP_HASH_SALT --config wrangler.toml
-```
-
-If `IP_HASH_SALT` is not configured, DialectSeed does not store IP hashes.
-
-Deploy the API:
+Deploy the Worker and frontend:
 
 ```bash
 npm run deploy:worker
-```
-
-Set the Pages environment variable `API_HOST` to the Worker hostname, then build and deploy the frontend:
-
-```bash
 npm run build
 npm run deploy:pages
 ```
 
-`public/_worker.js` proxies `/api/*` requests to the Worker so the browser can stay on the Pages origin.
+Set the Pages environment variable `API_HOST` to the Worker hostname.
 
-## Upgrade from the original Yangjiang-only version
+## Upgrading the original Yangjiang-only project
 
-Do not overwrite an existing v1 database with `schema.sql`. Back it up and run the migration once:
+Do not overwrite a v1 database with `schema.sql`. Back it up and run:
 
 ```bash
 npm run db:migrate:v2:remote
 ```
 
-The migration creates the variety layer, assigns the existing corpus to Yangjiang Cantonese, adds speaker and consent fields, and keeps training permission disabled for historical recordings.
+The migration moves the old corpus under the Yangjiang Cantonese variety and adds speaker and consent fields. Historical recordings keep `consent_training = 0`; an infrastructure migration must not silently expand the permission contributors originally gave.
 
-## Export data for ASR or TTS
+## Current limitations
 
-The admin page can download a training manifest directly.
+DialectSeed is not claiming that crowdsourced browser audio is automatically high-quality speech-model data.
 
-To download both metadata and audio:
+TTS in particular is sensitive to transcript mismatch, clipping, room acoustics, background noise, long silence, inconsistent speaking style, and speaker imbalance. The project keeps preprocessing explicit because silently applying aggressive cleanup during collection makes the resulting corpus harder to audit and reproduce.
 
-```bash
-node scripts/export-dataset.mjs \
-  --api https://your-pages-domain.example \
-  --token "$ADMIN_TOKEN" \
-  --task asr \
-  --out ./dataset-asr
-```
-
-Export one variety only:
-
-```bash
-node scripts/export-dataset.mjs \
-  --api https://your-pages-domain.example \
-  --token "$ADMIN_TOKEN" \
-  --variety 1 \
-  --task tts \
-  --out ./dataset-tts
-```
-
-You can use `DIALECTSEED_API_URL` and `DIALECTSEED_ADMIN_TOKEN` instead of command-line values.
-
-When there are fewer than 10 distinct speakers, the exporter keeps all samples in the training split rather than pretending that a tiny validation/test split is statistically meaningful.
+The training code is also a starting point, not a benchmark result. A useful next milestone is to publish reproducible base-model versus fine-tuned results on a frozen, speaker-disjoint Yangjiang Cantonese test set.
 
 ## Consent and data governance
 
-Voice data can reveal identity, age, region, health characteristics, and other personal information. DialectSeed therefore treats "preserve this recording" and "use this recording to train a model" as separate decisions.
+Voice is biometric and personal data. It can reveal identity, age, region, health characteristics, and other attributes.
 
-This repository provides a technical consent trail, not a universal legal policy. Anyone operating a public deployment still needs appropriate data licensing, withdrawal procedures, privacy notices, rules for minors, and publication policies for their jurisdiction and community.
+DialectSeed therefore treats archival consent and model-training consent as different decisions. The repository provides the technical mechanism for recording that choice, but a public deployment still needs an appropriate dataset license, privacy notice, withdrawal process, policy for minors, and community-specific publication rules.
 
 ## Why "DialectSeed"?
 
 One recording cannot preserve a language.
 
-But a small, well-described, reusable corpus can be a seed: something a community can grow into better documentation, better datasets, and eventually better speech technology for languages that are usually ignored by mainstream models.
+But a small, well-described and reusable corpus can be a seed: something a community can grow into better documentation, better datasets, and eventually better speech technology for languages that mainstream products do not serve well.
 
-This project started with Yangjiang Cantonese. The goal is for it not to end there.
+This project started with Yangjiang Cantonese. The point is for the process to be reusable somewhere else.
 
 ## License
 
