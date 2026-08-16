@@ -1,0 +1,15 @@
+name = "dialectseed-api"
+main = "worker/src/index.ts"
+compatibility_date = "2026-05-25"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,https://dialectseed.pages.dev,https://*.dialectseed.pages.dev"
+
+[[r2_buckets]]
+binding = "AUDIO_BUCKET"
+bucket_name = "your-r2-bucket"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "your-d1-database"
+database_id = "your-d1-database-id"
