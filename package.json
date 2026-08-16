@@ -1,0 +1,31 @@
+{
+  "name": "dialect-seed",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "dev:worker": "wrangler dev --config wrangler.toml",
+    "deploy:worker": "wrangler deploy --config wrangler.toml",
+    "deploy:pages": "wrangler pages deploy dist",
+    "db:migrate:local": "wrangler d1 execute DB --local --file=schema.sql --config wrangler.toml",
+    "db:migrate:remote": "wrangler d1 execute DB --remote --file=schema.sql --config wrangler.toml",
+    "db:migrate:v2:local": "wrangler d1 execute DB --local --file=migrations/0002_multivariety.sql --config wrangler.toml",
+    "db:migrate:v2:remote": "wrangler d1 execute DB --remote --file=migrations/0002_multivariety.sql --config wrangler.toml"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "wrangler": "latest"
+  }
+}
