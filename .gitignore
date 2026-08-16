@@ -7,3 +7,11 @@ dist/
 *.local
 *.tsbuildinfo
 .DS_Store
+
+# Local model-training artifacts
+.training_deps/
+dataset-asr/
+dataset-tts/
+training-data/
+runs/
+checkpoints/
