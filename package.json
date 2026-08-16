@@ -1,31 +1,33 @@
 {
-  "name": "dialect-seed",
+  "name": "dialectseed",
   "private": true,
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
+    "dev:worker": "wrangler dev --config wrangler.toml",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "dev:worker": "wrangler dev --config wrangler.toml",
     "deploy:worker": "wrangler deploy --config wrangler.toml",
-    "deploy:pages": "wrangler pages deploy dist",
-    "db:migrate:local": "wrangler d1 execute DB --local --file=schema.sql --config wrangler.toml",
-    "db:migrate:remote": "wrangler d1 execute DB --remote --file=schema.sql --config wrangler.toml",
-    "db:migrate:v2:local": "wrangler d1 execute DB --local --file=migrations/0002_multivariety.sql --config wrangler.toml",
-    "db:migrate:v2:remote": "wrangler d1 execute DB --remote --file=migrations/0002_multivariety.sql --config wrangler.toml"
+    "deploy:pages": "wrangler pages deploy dist --project-name dialectseed --branch production",
+    "db:migrate:local": "wrangler d1 execute your-d1-database --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute your-d1-database --remote --file=./schema.sql",
+    "db:migrate:v2:local": "wrangler d1 execute your-d1-database --local --file=./migrations/0002_multivariety.sql",
+    "db:migrate:v2:remote": "wrangler d1 execute your-d1-database --remote --file=./migrations/0002_multivariety.sql",
+    "dataset:export": "node scripts/export-dataset.mjs"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.552.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "wrangler": "latest"
+    "@cloudflare/workers-types": "^4.20251121.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "wrangler": "^4.48.0"
   }
 }
